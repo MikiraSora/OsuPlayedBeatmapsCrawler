@@ -1,9 +1,10 @@
 ﻿using CommandLine;
 using Newtonsoft.Json;
 using OsuPlayedBeatmapsCrawler;
+using OsuPlayedBeatmapsCrawler.DownloadSources;
+using OsuPlayedBeatmapsCrawler.DownloadSources.DefaultImpls;
 using System.Net;
 using System.Net.Mime;
-
 
 #region Command
 
@@ -31,6 +32,7 @@ var password = opt.Password;
 var beamtapSaveFolderPath = opt.BeamtapSaveFolderPath;
 var cursor = opt.Cursor;
 var logFolderPath = opt.LogFolderPath;
+var downloadSourceName = opt.DownloadSourceName;
 
 #endregion
 
@@ -62,6 +64,13 @@ var httpClient = new HttpClient(handler);
 var msg = await httpClient.GetAsync($"https://osu.ppy.sh/beatmapsets");
 var token = handler.CookieContainer.GetAllCookies().FirstOrDefault(x => x.Name == "XSRF-TOKEN").Value;
 
+#region DownloadSource
+
+DownloadSourceManager.RegisterDownloadSource<SayoDownloadSource>("sayo");
+DownloadSourceManager.RegisterDownloadSource<OfficalDownloadSource>("offical");
+
+#endregion
+
 #region Login
 
 var loginReq = new HttpRequestMessage();
@@ -87,6 +96,12 @@ if (!loginResult.IsSuccessStatusCode)
 
 int? totalBeatmapCount = null;
 
+#region Fetch & Download
+
+var downloadSource = DownloadSourceManager.GetSource(downloadSourceName, httpClient);
+log($"download source : {downloadSourceName} -> {downloadSource.GetType().Name}"); 
+log("");
+
 async Task<(IEnumerable<BeatmapSet>, string)> FetchBeatmapSets(string cursor = "")
 {
     var url = "https://osu.ppy.sh/beatmapsets/search?";
@@ -104,25 +119,7 @@ async Task<(IEnumerable<BeatmapSet>, string)> FetchBeatmapSets(string cursor = "
     return (queryResult.BeatmapSets, queryResult.CursorString);
 }
 
-async Task<bool> DownloadBeatmap(BeatmapSet set)
-{
-    var sayoUrl = $"https://txy1.sayobot.cn/beatmaps/download/full/{set.ID}?server=auto";
-    using var resp = await httpClient.GetAsync(sayoUrl);
-
-    var contentdispotision = resp.Content.Headers.GetValues("content-disposition");
-    var fileName = WebUtility.UrlDecode(new ContentDisposition(contentdispotision.FirstOrDefault()).FileName);
-    fileName = string.IsNullOrWhiteSpace(fileName) ? $"{set.ID}.osz" : fileName;
-
-    var filePath = Path.Combine(beamtapSaveFolderPath, fileName);
-
-    using var stream = await resp.Content.ReadAsStreamAsync();
-    using var fileStream = File.OpenWrite(filePath);
-
-    await stream.CopyToAsync(fileStream);
-    //log($"beatmap {set.ID} saved to {filePath}");
-
-    return true;//todo check
-}
+Task<bool> DownloadBeatmap(BeatmapSet set) => downloadSource.DownloadBeatmap(set, beamtapSaveFolderPath);
 
 var downloadGood = 0;
 var downloadBad = 0;
@@ -157,6 +154,7 @@ while (true)
         }
 
         log($"crawler download progress : {(downloadGood + downloadBad) * 100f / totalBeatmapCount} (GOOD : {downloadGood} / BAD : {downloadBad} / TOTAL : {totalBeatmapCount})");
+        log("");
     }
 
     if (string.IsNullOrWhiteSpace(nextCursor) || !beatmapSets.Any())
@@ -165,8 +163,12 @@ while (true)
         break;
     }
 
+    log($"--------------");
     log($"cursor change {cursor} -> {nextCursor}");
+    log($"--------------");
     cursor = nextCursor;
 }
 
-log($"login user = {loginResult.Content.ReadAsStream()}");
+#endregion
+
+log("ALL DONE! BYE~");

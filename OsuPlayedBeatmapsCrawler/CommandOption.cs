@@ -18,6 +18,9 @@ namespace OsuPlayedBeatmapsCrawler
         [Option("password", Required = false, HelpText = "osu! user password")]
         public string Password { get; set; }
 
+        [Option("source", Required = false, Default = "sayo", HelpText = "[option] specify download source.current support: 'sayo','offical' ")]
+        public string DownloadSourceName { get; set; }
+
         [Option("cursor", Required = false, Default = "", HelpText = "[option] cursor string")]
         public string Cursor { get; set; }
 
