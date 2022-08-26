@@ -35,7 +35,7 @@
 ```
 
 ## 中断续爬
-特殊情况可能应用因为各种原因中止爬取数据，但你可以通过本应用的日志文件提取cursor字段,然后通过设置`--cursor`执行应用可以实现继续爬取数据的功能。<br/>
+应用因为各种原因中止爬取数据，但你可以通过本应用的日志文件提取cursor字段,然后通过设置`--cursor`执行应用可以实现继续爬取数据的功能。<br/>
 在日志xxxx.log文件中:
 ```
 crawler download progress : 1.1551983 (GOOD : 46 / BAD : 0 / TOTAL : 3982)
@@ -57,7 +57,7 @@ downloaded beatmap id : 3688
 crawler download progress : 1.2807634 (GOOD : 51 / BAD : 0 / TOTAL : 3982)
 6257       Yoko Hikasa                     -  Don't Say "Lazy"
 ```
-1. 找到最后出现`cursor change`内容那一行
+1. 找到**最后**出现`cursor change`内容那一行
 2. 复制→右边的内容,即类似`eyJhcHByb3ZlZF9kYXRlIjoiMTIzOTMzMzU4MzAwMCIsImlkIjoiMzE5OCJ9`那一串
 3. 命令行执行程序，添加`--cursor`参数，值便是刚才复制那一坨
 ```bash
