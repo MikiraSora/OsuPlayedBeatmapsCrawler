@@ -1,29 +1,60 @@
-﻿using Newtonsoft.Json;
+﻿using CommandLine;
+using Newtonsoft.Json;
 using OsuPlayedBeatmapsCrawler;
 using System.Net;
 using System.Net.Mime;
 
 
-#region Setting
+#region Command
 
-var userName = Secret.UserName;
-var password = Secret.Password;
-var beamtapSaveFolderPath = "./beatmaps";
-var cursor = "";
-var logFolderPath = "./logs";
+var commandParseResult = Parser.Default.ParseArguments<CommandOption>(args);
+if (commandParseResult.Errors.Any())
+    return;
+var opt = commandParseResult.Value;
+
+if (File.Exists(opt.SecertFilePath))
+{
+    var lines = File.ReadAllLines(opt.SecertFilePath);
+    opt.UserName = lines[0];
+    opt.Password = lines[1];
+}
+
+
+if (string.IsNullOrWhiteSpace(opt.UserName) || string.IsNullOrWhiteSpace(opt.Password))
+{
+    Console.WriteLine("option 'username' or 'password' or 'secert' is empty.");
+    return;
+}
+
+var userName = opt.UserName;
+var password = opt.Password;
+var beamtapSaveFolderPath = opt.BeamtapSaveFolderPath;
+var cursor = opt.Cursor;
+var logFolderPath = opt.LogFolderPath;
 
 #endregion
 
 Directory.CreateDirectory(beamtapSaveFolderPath);
 Directory.CreateDirectory(logFolderPath);
 
-var logFilePath = Path.Combine(logFolderPath, $"{DateTime.Now.ToShortDateString} {DateTime.Now.ToShortTimeString}.log");
+#region Log
+
+var logFileNamePart = $"{DateTime.Now.ToShortDateString()} {DateTime.Now.ToShortTimeString()}".Replace("\\", "-").Replace("/", "-");
+var logFilePath = Path.Combine(logFolderPath, $"{logFileNamePart}.log");
+var failedLogFilePath = Path.Combine(logFolderPath, $"{logFileNamePart}.failed.log");
+
+void logFailed(BeatmapSet set)
+{
+    File.AppendAllText(failedLogFilePath, JsonConvert.SerializeObject(set, Formatting.None) + Environment.NewLine);
+}
+
 void log(string message)
 {
     File.AppendAllText(logFilePath, message + Environment.NewLine);
     Console.WriteLine(message);
 }
 
+#endregion
 
 var handler = new HttpClientHandler() { CookieContainer = new CookieContainer() };
 var httpClient = new HttpClient(handler);
@@ -115,12 +146,14 @@ while (true)
             {
                 downloadBad++;
                 log($"download beatmap failed , beatmap id : {beatmapSet.ID}");
+                logFailed(beatmapSet);
             }
         }
         catch (Exception e)
         {
             downloadBad++;
             log($"download beatmap {beatmapSet.ID} throw exception : {e.Message}");
+            logFailed(beatmapSet);
         }
 
         log($"crawler download progress : {(downloadGood + downloadBad) * 100f / totalBeatmapCount} (GOOD : {downloadGood} / BAD : {downloadBad} / TOTAL : {totalBeatmapCount})");
