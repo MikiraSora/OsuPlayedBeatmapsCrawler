@@ -17,5 +17,8 @@ namespace OsuPlayedBeatmapsCrawler
 
         [JsonProperty("cursor_string")]
         public string CursorString { get; set; }
+
+        [JsonProperty("total")]
+        public int TotalCount { get; set; }
     }
 }

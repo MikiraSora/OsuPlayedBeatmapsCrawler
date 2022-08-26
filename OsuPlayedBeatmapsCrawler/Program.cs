@@ -14,6 +14,9 @@ var logFolderPath = "./logs";
 
 #endregion
 
+Directory.CreateDirectory(beamtapSaveFolderPath);
+Directory.CreateDirectory(logFolderPath);
+
 var logFilePath = Path.Combine(logFolderPath, $"{DateTime.Now.ToShortDateString} {DateTime.Now.ToShortTimeString}.log");
 void log(string message)
 {
@@ -21,7 +24,6 @@ void log(string message)
     Console.WriteLine(message);
 }
 
-Directory.CreateDirectory(beamtapSaveFolderPath);
 
 var handler = new HttpClientHandler() { CookieContainer = new CookieContainer() };
 var httpClient = new HttpClient(handler);
@@ -29,10 +31,7 @@ var httpClient = new HttpClient(handler);
 var msg = await httpClient.GetAsync($"https://osu.ppy.sh/beatmapsets");
 var token = handler.CookieContainer.GetAllCookies().FirstOrDefault(x => x.Name == "XSRF-TOKEN").Value;
 
-foreach (Cookie cookie in handler.CookieContainer.GetAllCookies())
-{
-    log($"cookie domain : {cookie.Domain} name : {cookie.Name} value : {cookie.Value}");
-}
+#region Login
 
 var loginReq = new HttpRequestMessage();
 loginReq.Method = HttpMethod.Post;
@@ -47,6 +46,15 @@ loginReq.Content = new FormUrlEncodedContent(new[]
 });
 
 var loginResult = await httpClient.SendAsync(loginReq);
+if (!loginResult.IsSuccessStatusCode)
+{
+    log($"login failed : {loginResult.StatusCode} {await loginResult.Content.ReadAsStringAsync()}");
+    return;
+}
+
+#endregion
+
+int? totalBeatmapCount = null;
 
 async Task<(IEnumerable<BeatmapSet>, string)> FetchBeatmapSets(string cursor = "")
 {
@@ -59,6 +67,8 @@ async Task<(IEnumerable<BeatmapSet>, string)> FetchBeatmapSets(string cursor = "
 
     var fetchResult = await httpClient.GetStringAsync(url);
     var queryResult = JsonConvert.DeserializeObject<BeatmapSetQueryResult>(fetchResult);
+
+    totalBeatmapCount = totalBeatmapCount ?? queryResult.TotalCount;
 
     return (queryResult.BeatmapSets, queryResult.CursorString);
 }
@@ -83,6 +93,9 @@ async Task<bool> DownloadBeatmap(BeatmapSet set)
     return true;//todo check
 }
 
+var downloadGood = 0;
+var downloadBad = 0;
+
 while (true)
 {
     (var beatmapSets, var nextCursor) = await FetchBeatmapSets(cursor);
@@ -95,17 +108,22 @@ while (true)
         {
             if (await DownloadBeatmap(beatmapSet))
             {
+                downloadGood++;
                 log($"downloaded beatmap id : {beatmapSet.ID}");
             }
             else
             {
+                downloadBad++;
                 log($"download beatmap failed , beatmap id : {beatmapSet.ID}");
             }
         }
         catch (Exception e)
         {
+            downloadBad++;
             log($"download beatmap {beatmapSet.ID} throw exception : {e.Message}");
         }
+
+        log($"crawler download progress : {(downloadGood + downloadBad) * 100f / totalBeatmapCount} (GOOD : {downloadGood} / BAD : {downloadBad} / TOTAL : {totalBeatmapCount})");
     }
 
     if (string.IsNullOrWhiteSpace(nextCursor) || !beatmapSets.Any())
